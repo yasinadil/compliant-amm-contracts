@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Pre-fix copy (floored aggregate accrual), kept only so tests can demonstrate the rounding bug.
 pragma solidity ^0.8.27;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -8,14 +9,14 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import {IFixedApyStaking} from "./interfaces/IFixedApyStaking.sol";
+import {IFixedApyStaking} from "../../src/interfaces/IFixedApyStaking.sol";
 
 /**
  * @title FixedApyStaking
  * @notice Capacity-controlled fixed APY staking (v2) with configurable annual reward bucket, no fees, no program times
  * @dev Tokenomics-controlled emission system. maxStakeCapacity = rewardBucket/APY. Reward bucket set annually.
  */
-contract FixedApyStaking is IFixedApyStaking, AccessControl, ReentrancyGuard, Pausable {
+contract FixedApyStakingV1 is IFixedApyStaking, AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
@@ -185,11 +186,7 @@ contract FixedApyStaking is IFixedApyStaking, AccessControl, ReentrancyGuard, Pa
         uint256 delta = newRewardPerToken - rewardPerTokenStored;
 
         if (totalStaked > 0 && delta > 0) {
-            // Round up: each user's accrual is floored once over their whole holding period, while
-            // this aggregate is computed per update. Flooring here too let Σ user accruals exceed
-            // totalAccruedUnpaid by a few wei, so the last staker's claim/unstake/emergencyWithdraw
-            // underflowed and reverted. Ceil keeps totalAccruedUnpaid >= Σ accruedRewards.
-            uint256 globalAccrual = Math.mulDiv(delta, totalStaked, PRECISION, Math.Rounding.Ceil);
+            uint256 globalAccrual = (delta * totalStaked) / PRECISION;
             totalAccruedUnpaid += globalAccrual;
         }
 
